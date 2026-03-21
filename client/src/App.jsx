@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { supabase } from "./supabaseClient";
+import { QRCodeCanvas } from "qrcode.react";
 const FONTS = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');`;
 
 const MOCK_CUSTOMERS = [
@@ -239,6 +240,8 @@ export default function AquaCRM() {
   const [toast, setToast] = useState(null);
   const [newCustomer, setNewCustomer] = useState({ name: "", email: "", phone: "", channel: "Trade Show", tankSize: "", location: "", notes: "", tags: [] });
   const [newProduct, setNewProduct] = useState({ name: "", sku: "", category: "SPS Coral", price: "", cost: "", stock_qty: "", description: "" });
+  const [qrVisible, setQrVisible] = useState(false);
+  const [qrUrl, setQrUrl] = useState("");
 
   // Fetch all data from Supabase on mount
   useEffect(() => {
@@ -799,10 +802,46 @@ export default function AquaCRM() {
                   <div className="card" style={{ marginBottom: 16 }}>
                     <div className="section-title">QR Code Sign-up</div>
                     <div className="qr-promo">
-                      <div className="qr-box">📱</div>
-                      <div style={{ fontFamily: "Syne, sans-serif", fontWeight: 700, color: "#e0f0ff", marginBottom: 8 }}>Trade Show Sign-up Form</div>
-                      <div className="qr-text">Generate a QR code that links to a customer sign-up form. Display at your trade show booth — customers scan and fill it in themselves.</div>
-                      <button className="btn btn-ghost" style={{ marginTop: 14 }} onClick={() => showToast("QR code generator coming soon!")}>Generate QR Code</button>
+                      {!qrVisible ? (
+                        <>
+                          <div className="qr-box">📱</div>
+                          <div style={{ fontFamily: "Syne, sans-serif", fontWeight: 700, color: "#e0f0ff", marginBottom: 8 }}>Trade Show Sign-up Form</div>
+                          <div className="qr-text">Generate a QR code that links to a customer sign-up form. Display at your trade show booth — customers scan and fill it in themselves.</div>
+                          <div className="form-group" style={{ marginTop: 14, textAlign: "left" }}>
+                            <label>Sign-up Form URL</label>
+                            <input className="form-input" placeholder="https://your-site.netlify.app (or leave blank for current page)" value={qrUrl} onChange={e => setQrUrl(e.target.value)} />
+                          </div>
+                          <button className="btn btn-primary" style={{ marginTop: 8 }} onClick={() => setQrVisible(true)}>Generate QR Code</button>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ background: "white", padding: 16, borderRadius: 12, display: "inline-block", marginBottom: 12 }}>
+                            <QRCodeCanvas
+                              id="qr-canvas"
+                              value={qrUrl || window.location.origin + "/#add"}
+                              size={180}
+                              bgColor="#ffffff"
+                              fgColor="#050e1a"
+                              level="H"
+                              includeMargin={true}
+                            />
+                          </div>
+                          <div style={{ fontFamily: "Syne, sans-serif", fontWeight: 700, color: "#e0f0ff", marginBottom: 4, fontSize: 14 }}>Scan to Sign Up</div>
+                          <div className="qr-text" style={{ marginBottom: 12 }}>{qrUrl || window.location.origin + "/#add"}</div>
+                          <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+                            <button className="btn btn-primary btn-sm" onClick={() => {
+                              const canvas = document.getElementById("qr-canvas");
+                              const url = canvas.toDataURL("image/png");
+                              const link = document.createElement("a");
+                              link.download = "ptrcrm-signup-qr.png";
+                              link.href = url;
+                              link.click();
+                              showToast("✓ QR code downloaded!");
+                            }}>Download PNG</button>
+                            <button className="btn btn-ghost btn-sm" onClick={() => setQrVisible(false)}>Regenerate</button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
                   <div className="card">
