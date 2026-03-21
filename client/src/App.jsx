@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { supabase } from "./supabaseClient";
 const FONTS = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');`;
 
 const MOCK_CUSTOMERS = [
@@ -213,16 +214,50 @@ const styles = `
   .chart-container { height: 300px; width: 100%; margin-top: 16px; }
 `;
 
+const CustomTooltip = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="custom-tooltip">
+        <p className="label">{label}</p>
+        <p className="value">${payload[0].value}</p>
+      </div>
+    );
+  }
+  return null;
+};
+
 export default function AquaCRM() {
   const [tab, setTab] = useState("dashboard");
-  const [customers, setCustomers] = useState(MOCK_CUSTOMERS);
-  const [sales] = useState(MOCK_SALES);
-  const [campaigns] = useState(MOCK_CAMPAIGNS);
+  const [customers, setCustomers] = useState([]);
+  const [sales, setSales] = useState([]);
+  const [campaigns, setCampaigns] = useState([]);
+  const [promotions, setPromotions] = useState([]);
+  const [inventory, setInventory] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [search, setSearch] = useState("");
   const [channelFilter, setChannelFilter] = useState("All");
   const [toast, setToast] = useState(null);
   const [newCustomer, setNewCustomer] = useState({ name: "", email: "", phone: "", channel: "Trade Show", tankSize: "", location: "", notes: "", tags: [] });
+  const [newProduct, setNewProduct] = useState({ name: "", sku: "", category: "SPS Coral", price: "", cost: "", stock_qty: "", description: "" });
+
+  // Fetch all data from Supabase on mount
+  useEffect(() => {
+    const fetchData = async () => {
+      const [custRes, salesRes, campRes, promoRes, invRes] = await Promise.all([
+        supabase.from('customers').select('*').order('created_at', { ascending: false }),
+        supabase.from('sales').select('*').order('date', { ascending: false }),
+        supabase.from('campaigns').select('*').order('created_at', { ascending: false }),
+        supabase.from('promotions').select('*').order('created_at', { ascending: false }),
+        supabase.from('inventory').select('*').order('created_at', { ascending: false }),
+      ]);
+      if (custRes.data) setCustomers(custRes.data.map(c => ({ ...c, totalSpent: Number(c.total_spent), tankSize: c.tank_size, lastContact: c.last_contact })));
+      if (salesRes.data) setSales(salesRes.data.map(s => ({ ...s, customer: s.customer_name, amount: Number(s.amount) })));
+      if (campRes.data) setCampaigns(campRes.data);
+      if (promoRes.data) setPromotions(promoRes.data.map(p => ({ ...p, desc: p.description, start: p.start_date, end: p.end_date })));
+      if (invRes.data) setInventory(invRes.data.map(i => ({ ...i, price: Number(i.price), cost: Number(i.cost) })));
+    };
+    fetchData();
+  }, []);
 
   const showToast = (msg) => {
     setToast(msg);
@@ -261,25 +296,31 @@ export default function AquaCRM() {
     color: TAG_COLORS[key] || "#4a7fa5"
   }));
 
-  const CustomTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="custom-tooltip">
-          <p className="label">{label}</p>
-          <p className="value">${payload[0].value}</p>
-        </div>
-      );
-    }
-    return null;
-  };
-
-  const handleAddCustomer = () => {
+  const handleAddCustomer = async () => {
     if (!newCustomer.name || !newCustomer.email) return;
-    const c = { ...newCustomer, id: customers.length + 1, joined: new Date().toISOString().split("T")[0], totalSpent: 0, orders: 0, lastContact: new Date().toISOString().split("T")[0] };
-    setCustomers([c, ...customers]);
+    const { data, error } = await supabase.from('customers').insert([{
+      name: newCustomer.name, email: newCustomer.email, phone: newCustomer.phone,
+      channel: newCustomer.channel, tank_size: newCustomer.tankSize, location: newCustomer.location,
+      notes: newCustomer.notes, tags: JSON.stringify(newCustomer.tags),
+    }]).select();
+    if (error) { showToast("✗ Error: " + error.message); return; }
+    if (data) setCustomers([{ ...data[0], totalSpent: 0, tankSize: data[0].tank_size, lastContact: data[0].last_contact, tags: newCustomer.tags }, ...customers]);
     setNewCustomer({ name: "", email: "", phone: "", channel: "Trade Show", tankSize: "", location: "", notes: "", tags: [] });
     showToast("✓ Customer added successfully");
     setTab("customers");
+  };
+
+  const handleAddProduct = async () => {
+    if (!newProduct.name) return;
+    const { data, error } = await supabase.from('inventory').insert([{
+      name: newProduct.name, sku: newProduct.sku || null, category: newProduct.category,
+      price: Number(newProduct.price) || 0, cost: Number(newProduct.cost) || 0,
+      stock_qty: Number(newProduct.stock_qty) || 0, description: newProduct.description,
+    }]).select();
+    if (error) { showToast("✗ Error: " + error.message); return; }
+    if (data) setInventory([{ ...data[0], price: Number(data[0].price), cost: Number(data[0].cost) }, ...inventory]);
+    setNewProduct({ name: "", sku: "", category: "SPS Coral", price: "", cost: "", stock_qty: "", description: "" });
+    showToast("✓ Product added to inventory");
   };
 
   const toggleTag = (tag) => {
@@ -292,6 +333,7 @@ export default function AquaCRM() {
   const navItems = [
     { id: "dashboard", icon: "◈", label: "Dashboard" },
     { id: "customers", icon: "◉", label: "Customers" },
+    { id: "inventory", icon: "◫", label: "Inventory" },
     { id: "sales", icon: "◎", label: "Sales Log" },
     { id: "campaigns", icon: "◈", label: "Campaigns" },
     { id: "promotions", icon: "◇", label: "Promotions" },
@@ -339,6 +381,7 @@ export default function AquaCRM() {
             <div className="topbar-title">
               {tab === "dashboard" && "Dashboard"}
               {tab === "customers" && "Customers"}
+              {tab === "inventory" && "Inventory"}
               {tab === "sales" && "Sales Log"}
               {tab === "campaigns" && "Email Campaigns"}
               {tab === "promotions" && "Promotions"}
@@ -516,6 +559,85 @@ export default function AquaCRM() {
               </div>
             )}
 
+            {/* INVENTORY */}
+            {tab === "inventory" && (
+              <div className="card">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                  <div className="section-title" style={{ margin: 0 }}>Product Catalog</div>
+                  <div style={{ fontSize: 13, color: "#4fc3f7", fontFamily: "Syne, sans-serif", fontWeight: 700 }}>{inventory.length} products · {inventory.reduce((a, b) => a + (b.stock_qty || 0), 0)} total units</div>
+                </div>
+                <table className="sales-table">
+                  <thead>
+                    <tr>
+                      <th>Product</th>
+                      <th>SKU</th>
+                      <th>Category</th>
+                      <th>Price</th>
+                      <th>Cost</th>
+                      <th>Stock</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {inventory.map(item => (
+                      <tr key={item.id}>
+                        <td style={{ color: "#e0f0ff", fontWeight: 500 }}>{item.name}</td>
+                        <td style={{ fontSize: 12, color: "#4a7fa5", fontFamily: "monospace" }}>{item.sku || "—"}</td>
+                        <td><span className="tag" style={{ background: `${TAG_COLORS[item.category] || "#4a7fa5"}22`, color: TAG_COLORS[item.category] || "#4a7fa5" }}>{item.category}</span></td>
+                        <td className="amount-cell">${Number(item.price).toFixed(2)}</td>
+                        <td style={{ color: "#4a7fa5" }}>${Number(item.cost).toFixed(2)}</td>
+                        <td><span style={{ color: item.stock_qty > 5 ? "#06d6a0" : item.stock_qty > 0 ? "#ffd166" : "#ef476f", fontWeight: 600 }}>{item.stock_qty}</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {inventory.length === 0 && (
+                  <div className="empty"><div className="empty-icon">📦</div>No products yet. Add your first product below.</div>
+                )}
+
+                <div style={{ marginTop: 24, padding: 20, background: "#0a1628", borderRadius: 12, border: "1px solid #1a3a5c" }}>
+                  <div className="section-title">Add New Product</div>
+                  <div className="form-grid">
+                    <div className="form-group">
+                      <label>Product Name *</label>
+                      <input className="form-input" placeholder="e.g. WYSIWYG Acropora Colony" value={newProduct.name} onChange={e => setNewProduct({ ...newProduct, name: e.target.value })} />
+                    </div>
+                    <div className="form-group">
+                      <label>SKU</label>
+                      <input className="form-input" placeholder="e.g. SPS-PK-001" value={newProduct.sku} onChange={e => setNewProduct({ ...newProduct, sku: e.target.value })} />
+                    </div>
+                    <div className="form-group">
+                      <label>Category</label>
+                      <select className="form-input" value={newProduct.category} onChange={e => setNewProduct({ ...newProduct, category: e.target.value })}>
+                        <option>SPS Coral</option>
+                        <option>LPS Coral</option>
+                        <option>Soft Coral</option>
+                        <option>LED Lights</option>
+                        <option>Equipment</option>
+                        <option>Accessories</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Stock Quantity</label>
+                      <input className="form-input" type="number" placeholder="0" value={newProduct.stock_qty} onChange={e => setNewProduct({ ...newProduct, stock_qty: e.target.value })} />
+                    </div>
+                    <div className="form-group">
+                      <label>Price ($)</label>
+                      <input className="form-input" type="number" placeholder="0.00" value={newProduct.price} onChange={e => setNewProduct({ ...newProduct, price: e.target.value })} />
+                    </div>
+                    <div className="form-group">
+                      <label>Cost ($)</label>
+                      <input className="form-input" type="number" placeholder="0.00" value={newProduct.cost} onChange={e => setNewProduct({ ...newProduct, cost: e.target.value })} />
+                    </div>
+                    <div className="form-group full">
+                      <label>Description</label>
+                      <textarea className="form-input" rows={2} placeholder="Product description..." value={newProduct.description} onChange={e => setNewProduct({ ...newProduct, description: e.target.value })} />
+                    </div>
+                  </div>
+                  <button className="btn btn-primary" style={{ width: "100%", padding: "12px", marginTop: 8 }} onClick={handleAddProduct}>Add Product →</button>
+                </div>
+              </div>
+            )}
+
             {/* SALES */}
             {tab === "sales" && (
               <div className="card">
@@ -606,19 +728,14 @@ export default function AquaCRM() {
                 <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
                   <button className="btn btn-primary" onClick={() => showToast("Promo builder coming soon!")}>+ New Promotion</button>
                 </div>
-                {[
-                  { title: "Free Shipping — Orders $399+", desc: "Auto-applies at checkout on pootangreefs.com. Remind email list customers before Live Sales.", start: "Ongoing", end: "Ongoing", code: "Auto", channel: "Shopify" },
-                  { title: "TikTok Live Flash Sale — SPS Packs", desc: "Exclusive pricing during live stream. DM to claim. First come first served — mention pack # in chat.", start: "Mar 12", end: "Mar 12", code: "LIVE10", channel: "TikTok" },
-                  { title: "WYSIWYG Early Access for Email Subscribers", desc: "Email list gets 24hr early access before new WYSIWYG pieces go live on site.", start: "Ongoing", end: "Ongoing", code: "Email Only", channel: "Email List" },
-                  { title: "Trade Show Loyalty — 5th Show Reward", desc: "Visit 5 shows, get a free frag. Track via customer notes field in CRM.", start: "Ongoing", end: "Ongoing", code: "In-Person", channel: "Trade Show" },
-                ].map((promo, i) => (
-                  <div key={i} className="promo-card">
+                {promotions.map((promo, i) => (
+                  <div key={promo.id || i} className="promo-card">
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                       <div>
                         <div className="promo-title">{promo.title}</div>
-                        <div className="promo-desc">{promo.desc}</div>
+                        <div className="promo-desc">{promo.desc || promo.description}</div>
                         <div className="promo-meta">
-                          <span>📅 <strong>{promo.start}</strong> → {promo.end}</span>
+                          <span>📅 <strong>{promo.start || promo.start_date}</strong> → {promo.end || promo.end_date}</span>
                           <span>🔖 Code: <strong>{promo.code}</strong></span>
                           <span>📣 <strong>{promo.channel}</strong></span>
                         </div>
