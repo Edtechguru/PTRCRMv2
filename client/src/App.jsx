@@ -217,6 +217,9 @@ export default function AquaCRM() {
   const [channelFilter, setChannelFilter] = useState("All");
   const [toast, setToast] = useState(null);
   const [newCustomer, setNewCustomer] = useState({ name: "", email: "", phone: "", channel: "Trade Show", tankSize: "", location: "", notes: "", tags: [] });
+  const [isEditing, setIsEditing] = useState(false);
+  const [editFormData, setEditFormData] = useState({});
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [newProduct, setNewProduct] = useState({ name: "", sku: "", category: "SPS Coral", price: "", cost: "", stock_qty: "", description: "" });
   const [qrVisible, setQrVisible] = useState(false);
   const [qrUrl, setQrUrl] = useState("");
@@ -286,6 +289,67 @@ export default function AquaCRM() {
     
     fetchData();
   }, []);
+
+  const handleEditClick = () => {
+    setEditFormData({
+      name: selectedCustomer.name || "",
+      email: selectedCustomer.email || "",
+      phone: selectedCustomer.phone || "",
+      location: selectedCustomer.location || "",
+      channel: selectedCustomer.channel || "Trade Show",
+      tankSize: selectedCustomer.tankSize || "",
+      notes: selectedCustomer.notes || ""
+    });
+    setIsEditing(true);
+  };
+
+  const handleCustomerSave = async () => {
+    const { error } = await supabase
+      .from('customers')
+      .update({
+        name: editFormData.name,
+        email: editFormData.email,
+        phone: editFormData.phone,
+        location: editFormData.location,
+        channel: editFormData.channel,
+        tank_size: editFormData.tankSize,
+        notes: editFormData.notes
+      })
+      .eq('id', selectedCustomer.id);
+
+    if (error) {
+      console.error("Update error:", error);
+      showToast("Save failed — please try again");
+      return; // Keep user in edit mode
+    }
+
+    const updatedCustomer = { 
+      ...selectedCustomer, 
+      ...editFormData 
+    };
+    setCustomers(customers.map(c => c.id === selectedCustomer.id ? updatedCustomer : c));
+    setSelectedCustomer(updatedCustomer);
+    setIsEditing(false);
+    showToast("Customer profile updated!");
+  };
+
+  const handleCustomerDelete = async () => {
+    const { error } = await supabase
+      .from('customers')
+      .delete()
+      .eq('id', selectedCustomer.id);
+
+    if (error) {
+      console.error("Delete error:", error);
+      showToast("Delete failed — please try again");
+      return; // Keep modal open
+    }
+
+    setCustomers(customers.filter(c => c.id !== selectedCustomer.id));
+    setShowDeleteConfirm(false);
+    setSelectedCustomer(null);
+    showToast("Customer deleted");
+  };
 
   const showToast = (msg) => {
     setToast(msg);
@@ -908,35 +972,60 @@ export default function AquaCRM() {
 
         {/* Customer Detail Modal */}
         {selectedCustomer && (
-          <div className="modal-overlay" onClick={() => setSelectedCustomer(null)}>
+          <div className="modal-overlay" onClick={() => { setSelectedCustomer(null); setIsEditing(false); setShowDeleteConfirm(false); }}>
             <div className="modal" onClick={e => e.stopPropagation()}>
               <div className="modal-header">
                 <div className="profile-header" style={{ margin: 0, flex: 1 }}>
                   <div className="profile-avatar">{selectedCustomer.name.split(" ").map(n => n[0]).join("")}</div>
                   <div className="profile-info">
-                    <h2>{selectedCustomer.name}</h2>
-                    <div className="profile-meta">{selectedCustomer.email} · {selectedCustomer.phone} · {selectedCustomer.location}</div>
+                    {isEditing ? (
+                      <input className="form-input" style={{ marginBottom: 4, width: "100%", fontSize: "16px", fontWeight: "bold" }} value={editFormData.name} onChange={e => setEditFormData({ ...editFormData, name: e.target.value })} placeholder="Full Name" />
+                    ) : (
+                      <h2>{selectedCustomer.name}</h2>
+                    )}
+                    {isEditing ? (
+                      <div style={{ display: "flex", gap: 8, marginBottom: 4 }}>
+                        <input className="form-input" style={{ flex: 1 }} value={editFormData.email} onChange={e => setEditFormData({ ...editFormData, email: e.target.value })} placeholder="Email" />
+                        <input className="form-input" style={{ width: 120 }} value={editFormData.phone} onChange={e => setEditFormData({ ...editFormData, phone: e.target.value })} placeholder="Phone" />
+                        <input className="form-input" style={{ flex: 1 }} value={editFormData.location} onChange={e => setEditFormData({ ...editFormData, location: e.target.value })} placeholder="Location" />
+                      </div>
+                    ) : (
+                      <div className="profile-meta">{selectedCustomer.email} · {selectedCustomer.phone} · {selectedCustomer.location}</div>
+                    )}
                     <div style={{ marginTop: 6 }}>
-                      <span className="channel-badge" style={{ background: `${CHANNEL_COLORS[selectedCustomer.channel] || "#4a7fa5"}22`, color: CHANNEL_COLORS[selectedCustomer.channel] || "#4a7fa5" }}>{selectedCustomer.channel || "Unknown"}</span>
+                      {isEditing ? (
+                        <select className="form-input" style={{ width: "auto", display: "inline-block", marginRight: 8, padding: "4px 8px" }} value={editFormData.channel} onChange={e => setEditFormData({ ...editFormData, channel: e.target.value })}>
+                          {channels.map(ch => <option key={ch}>{ch}</option>)}
+                        </select>
+                      ) : (
+                        <span className="channel-badge" style={{ background: `${CHANNEL_COLORS[selectedCustomer.channel] || "#4a7fa5"}22`, color: CHANNEL_COLORS[selectedCustomer.channel] || "#4a7fa5" }}>{selectedCustomer.channel || "Unknown"}</span>
+                      )}
                       {(Array.isArray(selectedCustomer.tags) ? selectedCustomer.tags : []).map(t => <span key={t} className="tag" style={{ background: `${TAG_COLORS[t] || "#4a7fa5"}22`, color: TAG_COLORS[t] || "#4a7fa5", marginLeft: 4 }}>{t}</span>)}
                     </div>
                   </div>
                 </div>
-                <button className="modal-close" onClick={() => setSelectedCustomer(null)}>✕</button>
+                <button className="modal-close" onClick={() => { setSelectedCustomer(null); setIsEditing(false); setShowDeleteConfirm(false); }}>✕</button>
               </div>
               <div className="detail-grid">
-                <div className="detail-item"><label>Tank Size</label><span>{selectedCustomer.tankSize || "—"}</span></div>
+                <div className="detail-item">
+                  <label>Tank Size</label>
+                  {isEditing ? (
+                    <input className="form-input" value={editFormData.tankSize} onChange={e => setEditFormData({...editFormData, tankSize: e.target.value})} placeholder="e.g. 120gal" />
+                  ) : (
+                    <span>{selectedCustomer.tankSize || "—"}</span>
+                  )}
+                </div>
                 <div className="detail-item"><label>Total Spent</label><span style={{ color: "#4fc3f7", fontFamily: "Syne, sans-serif", fontWeight: 700 }}>${selectedCustomer.totalSpent}</span></div>
                 <div className="detail-item"><label>Orders</label><span>{selectedCustomer.orders}</span></div>
                 <div className="detail-item"><label>Customer Since</label><span>{selectedCustomer.joined}</span></div>
                 <div className="detail-item"><label>Last Contact</label><span>{selectedCustomer.lastContact}</span></div>
                 <div className="detail-item"><label>Channel</label><span>{selectedCustomer.channel}</span></div>
               </div>
-              {selectedCustomer.notes && (
-                <>
-                  <div style={{ fontSize: 11, color: "#2a5278", textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: 8 }}>Notes</div>
-                  <div className="notes-box">{selectedCustomer.notes}</div>
-                </>
+              <div style={{ fontSize: 11, color: "#2a5278", textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: 8, marginTop: 16 }}>Notes</div>
+              {isEditing ? (
+                <textarea className="form-input" rows={3} value={editFormData.notes} onChange={e => setEditFormData({...editFormData, notes: e.target.value})} placeholder="Customer notes..." />
+              ) : (
+                selectedCustomer.notes ? <div className="notes-box">{selectedCustomer.notes}</div> : <div style={{ color: "#4a7fa5", fontSize: 13, marginBottom: 16 }}>No notes added.</div>
               )}
               <div className="purchase-history">
                 <h4>Purchase History</h4>
@@ -954,10 +1043,33 @@ export default function AquaCRM() {
                 }
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
-                <button className="btn btn-primary btn-sm" onClick={() => { showToast(`Email drafted for ${selectedCustomer.name}`); setSelectedCustomer(null); }}>✉ Send Email</button>
-                <button className="btn btn-ghost btn-sm" onClick={() => { showToast("Opened in edit mode"); setSelectedCustomer(null); }}>Edit Profile</button>
-                <button className="btn btn-ghost btn-sm" onClick={() => { showToast("Added to campaign segment"); setSelectedCustomer(null); }}>Add to Campaign</button>
+                {isEditing ? (
+                  <>
+                    <button className="btn btn-primary btn-sm" onClick={handleCustomerSave}>Save Changes</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setIsEditing(false)}>Cancel</button>
+                  </>
+                ) : (
+                  <>
+                    <button className="btn btn-primary btn-sm" onClick={() => { showToast(`Email drafted for ${selectedCustomer.name}`); setSelectedCustomer(null); }}>✉ Send Email</button>
+                    <button className="btn btn-ghost btn-sm" onClick={handleEditClick}>Edit Profile</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => { showToast("Added to campaign segment"); setSelectedCustomer(null); }}>Add to Campaign</button>
+                    <button className="btn btn-ghost btn-sm" style={{ color: "#ff4d4f" }} onClick={() => setShowDeleteConfirm(true)}>Delete Customer</button>
+                  </>
+                )}
               </div>
+              
+              {/* Delete Confirmation Overlay */}
+              {showDeleteConfirm && (
+                <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(5, 14, 26, 0.95)", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: 32, borderRadius: 16, zIndex: 10 }}>
+                  <div style={{ fontSize: 24, marginBottom: 16 }}>⚠️</div>
+                  <h3 style={{ margin: "0 0 12px 0", color: "#e0f0ff", textAlign: "center" }}>Delete Customer?</h3>
+                  <p style={{ color: "#4a7fa5", textAlign: "center", marginBottom: 24, lineHeight: 1.5 }}>Are you sure you want to delete {selectedCustomer.name}? This cannot be undone.</p>
+                  <div style={{ display: "flex", gap: 12 }}>
+                    <button className="btn btn-ghost" onClick={() => setShowDeleteConfirm(false)}>Cancel</button>
+                    <button className="btn btn-primary" style={{ background: "#ff4d4f", borderColor: "#ff4d4f", color: "white" }} onClick={handleCustomerDelete}>Delete</button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
