@@ -220,10 +220,12 @@ export default function AquaCRM() {
   const [newProduct, setNewProduct] = useState({ name: "", sku: "", category: "SPS Coral", price: "", cost: "", stock_qty: "", description: "" });
   const [qrVisible, setQrVisible] = useState(false);
   const [qrUrl, setQrUrl] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
 
   // Step 2 & 3: Fetch real customers and inventory from Supabase on mount
   useEffect(() => {
     const fetchData = async () => {
+      setIsLoading(true);
       const [custRes, invRes, salesRes, campRes, promoRes] = await Promise.all([
         supabase.from('customers').select('*').order('created_at', { ascending: false }),
         supabase.from('inventory').select('*').order('created_at', { ascending: false }),
@@ -279,6 +281,7 @@ export default function AquaCRM() {
         })));
       }
       if (promoRes.error) console.error("Error fetching promotions:", promoRes.error);
+      setIsLoading(false);
     };
     
     fetchData();
@@ -422,6 +425,13 @@ export default function AquaCRM() {
           </div>
 
           <div className="content">
+            {isLoading ? (
+              <div className="empty" style={{ marginTop: "100px" }}>
+                <div className="empty-icon">⏳</div>
+                <div style={{ fontSize: 16, fontFamily: "Syne, sans-serif" }}>Loading Data...</div>
+              </div>
+            ) : (
+              <>
 
             {/* DASHBOARD */}
             {tab === "dashboard" && (
@@ -888,6 +898,9 @@ export default function AquaCRM() {
                   </div>
                 </div>
               </div>
+            )}
+
+              </>
             )}
 
           </div>
