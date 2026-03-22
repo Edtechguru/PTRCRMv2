@@ -226,6 +226,9 @@ export default function AquaCRM() {
   const [newSale, setNewSale] = useState({ customer_id: "", product_id: "", channel: "Shopify", amount: "", date: new Date().toISOString().split('T')[0] });
   const [editingSale, setEditingSale] = useState(null);
   const [deleteSaleId, setDeleteSaleId] = useState(null);
+  const [showCampaignModal, setShowCampaignModal] = useState(false);
+  const [editingCampaign, setEditingCampaign] = useState(null);
+  const [campaignFormData, setCampaignFormData] = useState({ name: "", status: "Draft", segment: "", date: new Date().toISOString().split('T')[0] });
   const [qrVisible, setQrVisible] = useState(false);
   const [qrUrl, setQrUrl] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -571,6 +574,76 @@ export default function AquaCRM() {
     setDeleteSaleId(null);
     if (editingSale && editingSale.id === deleteSaleId) setEditingSale(null);
     showToast("Sale deleted");
+  };
+
+  const handleCampaignSave = async () => {
+    if (!campaignFormData.name) {
+      showToast("Campaign Name is required");
+      return;
+    }
+
+    const payload = {
+      name: campaignFormData.name,
+      status: campaignFormData.status,
+      segment: campaignFormData.segment,
+      date: campaignFormData.date
+    };
+
+    if (editingCampaign) {
+      // UPDATE
+      const { error } = await supabase
+        .from('campaigns')
+        .update(payload)
+        .eq('id', editingCampaign.id);
+
+      if (error) {
+        console.error("Update error:", error);
+        showToast("Save failed — please try again");
+        return;
+      }
+
+      setCampaigns(campaigns.map(c => c.id === editingCampaign.id ? { ...c, ...payload } : c));
+      showToast("Campaign updated successfully!");
+    } else {
+      // INSERT
+      const { data, error } = await supabase
+        .from('campaigns')
+        .insert([{ ...payload, sent: 0, opened: 0, clicked: 0 }])
+        .select();
+
+      if (error) {
+        console.error("Insert error:", error);
+        showToast("Save failed — please try again");
+        return;
+      }
+
+      setCampaigns([data[0], ...campaigns]);
+      showToast("Campaign created successfully!");
+    }
+
+    setShowCampaignModal(false);
+    setEditingCampaign(null);
+  };
+
+  const openCampaignModal = (camp = null) => {
+    if (camp) {
+      setEditingCampaign(camp);
+      setCampaignFormData({
+        name: camp.name,
+        status: camp.status,
+        segment: camp.segment,
+        date: camp.date
+      });
+    } else {
+      setEditingCampaign(null);
+      setCampaignFormData({
+        name: "",
+        status: "Draft",
+        segment: "",
+        date: new Date().toISOString().split('T')[0]
+      });
+    }
+    setShowCampaignModal(true);
   };
 
   const toggleTag = (tag) => {
@@ -1112,7 +1185,7 @@ export default function AquaCRM() {
             {tab === "campaigns" && (
               <>
                 <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
-                  <button className="btn btn-primary" onClick={() => showToast("Campaign builder coming soon!")}>+ New Campaign</button>
+                  <button className="btn btn-primary" onClick={() => openCampaignModal()}>+ New Campaign</button>
                 </div>
                 {campaigns.map(camp => (
                   <div key={camp.id} className="campaign-card">
@@ -1135,7 +1208,7 @@ export default function AquaCRM() {
                       </div>
                     </div>
                     <span className={`status-badge status-${camp.status.toLowerCase()}`}>{camp.status}</span>
-                    <button className="btn btn-ghost btn-sm" onClick={() => showToast("Opening campaign editor...")}>Edit</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => openCampaignModal(camp)}>Edit</button>
                   </div>
                 ))}
                 <div className="card" style={{ marginTop: 16, background: "linear-gradient(135deg, #0a1f38, #071220)" }}>
@@ -1151,7 +1224,10 @@ export default function AquaCRM() {
                         <div style={{ color: "#e0f0ff", fontWeight: 500, fontSize: 13 }}>{seg.name} <span style={{ color: "#4fc3f7", fontFamily: "Syne, sans-serif" }}>({seg.count})</span></div>
                         <div style={{ color: "#4a7fa5", fontSize: 12, marginTop: 2 }}>{seg.desc}</div>
                       </div>
-                      <button className="btn btn-ghost btn-sm" onClick={() => showToast(`Creating campaign for ${seg.name}...`)}>Create Campaign</button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => {
+                        openCampaignModal();
+                        setCampaignFormData(prev => ({ ...prev, name: `${seg.name} Campaign`, segment: seg.name }));
+                      }}>Create Campaign</button>
                     </div>
                   ))}
                 </div>
@@ -1409,6 +1485,80 @@ export default function AquaCRM() {
         )}
 
         {toast && <div className="toast">{toast}</div>}
+
+        {/* Campaign Builder Modal */}
+        {showCampaignModal && (
+          <div className="modal-overlay">
+            <div className="modal">
+              <div className="modal-header">
+                <div>
+                  <h2 style={{ fontFamily: 'Syne', color: '#e0f0ff', fontSize: 24, margin: 0 }}>
+                    {editingCampaign ? "Edit Campaign" : "Build New Campaign"}
+                  </h2>
+                  <p style={{ color: '#4a7fa5', fontSize: 13, marginTop: 4 }}>
+                    {editingCampaign ? `Updating details for ${editingCampaign.name}` : "Define your targets and message"}
+                  </p>
+                </div>
+                <button className="modal-close" onClick={() => setShowCampaignModal(false)}>×</button>
+              </div>
+
+              <div className="form-grid">
+                <div className="form-group full">
+                  <label>Campaign Name *</label>
+                  <input 
+                    className="form-input" 
+                    placeholder="e.g. VIP Early Access Drop" 
+                    value={campaignFormData.name} 
+                    onChange={e => setCampaignFormData({...campaignFormData, name: e.target.value})}
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label>Status</label>
+                  <select 
+                    className="form-input" 
+                    value={campaignFormData.status} 
+                    onChange={e => setCampaignFormData({...campaignFormData, status: e.target.value})}
+                  >
+                    <option>Draft</option>
+                    <option>Active</option>
+                    <option>Sent</option>
+                    <option>Archived</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Launch Date</label>
+                  <input 
+                    className="form-input" 
+                    type="date" 
+                    value={campaignFormData.date} 
+                    onChange={e => setCampaignFormData({...campaignFormData, date: e.target.value})}
+                  />
+                </div>
+
+                <div className="form-group full">
+                  <label>Target Segment</label>
+                  <input 
+                    className="form-input" 
+                    placeholder="e.g. SPS Coral buyers, Top Spenders" 
+                    value={campaignFormData.segment} 
+                    onChange={e => setCampaignFormData({...campaignFormData, segment: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              <div style={{ marginTop: 32, display: "flex", gap: 12 }}>
+                <button className="btn btn-primary" style={{ flex: 1, padding: '14px' }} onClick={handleCampaignSave}>
+                  {editingCampaign ? "Save Changes" : "Create Campaign →"}
+                </button>
+                <button className="btn btn-ghost" style={{ padding: '0 24px' }} onClick={() => setShowCampaignModal(false)}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </>
   );
