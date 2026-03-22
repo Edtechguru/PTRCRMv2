@@ -221,6 +221,11 @@ export default function AquaCRM() {
   const [editFormData, setEditFormData] = useState({});
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [newProduct, setNewProduct] = useState({ name: "", sku: "", category: "SPS Coral", price: "", cost: "", stock_qty: "", description: "" });
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [deleteProductId, setDeleteProductId] = useState(null);
+  const [newSale, setNewSale] = useState({ customer_id: "", product_id: "", channel: "Shopify", amount: "", date: new Date().toISOString().split('T')[0] });
+  const [editingSale, setEditingSale] = useState(null);
+  const [deleteSaleId, setDeleteSaleId] = useState(null);
   const [qrVisible, setQrVisible] = useState(false);
   const [qrUrl, setQrUrl] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -416,6 +421,156 @@ export default function AquaCRM() {
     if (data) setInventory([{ ...data[0], price: Number(data[0].price), cost: Number(data[0].cost) }, ...inventory]);
     setNewProduct({ name: "", sku: "", category: "SPS Coral", price: "", cost: "", stock_qty: "", description: "" });
     showToast("✓ Product added to inventory");
+  };
+
+  const handleInventorySave = async () => {
+    const { error } = await supabase
+      .from('inventory')
+      .update({
+        name: editingProduct.name,
+        category: editingProduct.category,
+        description: editingProduct.description,
+        price: Number(editingProduct.price) || 0,
+        cost: Number(editingProduct.cost) || 0,
+        stock_qty: Number(editingProduct.stock_qty) || 0,
+      })
+      .eq('id', editingProduct.id);
+
+    if (error) {
+      console.error("Update error:", error);
+      showToast("Save failed — please try again");
+      return; 
+    }
+
+    setInventory(inventory.map(item => item.id === editingProduct.id ? { 
+      ...item, 
+      ...editingProduct, 
+      price: Number(editingProduct.price) || 0, 
+      cost: Number(editingProduct.cost) || 0, 
+      stock_qty: Number(editingProduct.stock_qty) || 0 
+    } : item));
+    setEditingProduct(null);
+    showToast("Product updated successfully!");
+  };
+
+  const handleInventoryDelete = async () => {
+    const { error } = await supabase
+      .from('inventory')
+      .delete()
+      .eq('id', deleteProductId);
+
+    if (error) {
+      console.error("Delete error:", error);
+      showToast("Delete failed — please try again");
+      return;
+    }
+
+    setInventory(inventory.filter(item => item.id !== deleteProductId));
+    setDeleteProductId(null);
+    if (editingProduct && editingProduct.id === deleteProductId) setEditingProduct(null);
+    showToast("Product deleted");
+  };
+
+  const handleAddSale = async () => {
+    if (!newSale.customer_id || !newSale.product_id || !newSale.amount) return;
+    
+    const customer = customers.find(c => c.id.toString() === newSale.customer_id.toString());
+    const product = inventory.find(p => p.id.toString() === newSale.product_id.toString());
+    
+    const { data: insertedSale, error } = await supabase.from('sales').insert([{
+      customer_id: customer.id,
+      customer_name: customer.name,
+      product_id: product.id,
+      product: product.name,
+      category: product.category,
+      channel: newSale.channel,
+      amount: Number(newSale.amount),
+      date: newSale.date
+    }]).select();
+
+    if (error) { showToast("✗ Error: " + error.message); return; }
+
+    const newSalesList = [{ ...insertedSale[0], customer: insertedSale[0].customer_name, amount: Number(insertedSale[0].amount) }, ...sales];
+    newSalesList.sort((a, b) => new Date(b.date) - new Date(a.date));
+    setSales(newSalesList);
+    
+    const { error: custError } = await supabase
+      .from('customers')
+      .update({ 
+        total_spent: customer.totalSpent + Number(newSale.amount),
+        orders: customer.orders + 1
+      })
+      .eq('id', customer.id);
+      
+    if (custError) {
+      console.error("Customer update error:", custError);
+    } else {
+      setCustomers(customers.map(c => c.id === customer.id ? { 
+        ...c, 
+        totalSpent: c.totalSpent + Number(newSale.amount),
+        orders: c.orders + 1
+      } : c));
+    }
+
+    setNewSale({ customer_id: "", product_id: "", channel: "Shopify", amount: "", date: new Date().toISOString().split('T')[0] });
+    showToast("✓ Sale logged successfully");
+  };
+
+  const handleSaleSave = async () => {
+    const cust = customers.find(c => c.id.toString() === editingSale.customer_id?.toString()) || { id: editingSale.customer_id, name: editingSale.customer };
+    const prod = inventory.find(p => p.id.toString() === editingSale.product_id?.toString()) || { id: editingSale.product_id, name: editingSale.product, category: editingSale.category };
+    
+    const { error } = await supabase
+      .from('sales')
+      .update({
+        customer_id: cust.id,
+        customer_name: cust.name,
+        product_id: prod.id,
+        product: prod.name,
+        category: prod.category,
+        channel: editingSale.channel,
+        amount: Number(editingSale.amount),
+        date: editingSale.date
+      })
+      .eq('id', editingSale.id);
+
+    if (error) {
+      console.error("Update error:", error);
+      showToast("Save failed — please try again");
+      return; 
+    }
+
+    setSales(sales.map(item => item.id === editingSale.id ? { 
+      ...item,
+      customer_id: cust.id,
+      customer: cust.name,
+      product_id: prod.id,
+      product: prod.name,
+      category: prod.category,
+      channel: editingSale.channel,
+      amount: Number(editingSale.amount),
+      date: editingSale.date
+    } : item));
+    setEditingSale(null);
+    showToast("Sale updated successfully!");
+  };
+
+  const handleSaleDelete = async () => {
+    const { error } = await supabase
+      .from('sales')
+      .delete()
+      .eq('id', deleteSaleId);
+
+    if (error) {
+      console.error("Delete error:", error);
+      showToast("Delete failed — please try again");
+      return;
+    }
+
+    setSales(sales.filter(item => item.id !== deleteSaleId));
+    setDeleteSaleId(null);
+    if (editingSale && editingSale.id === deleteSaleId) setEditingSale(null);
+    showToast("Sale deleted");
   };
 
   const toggleTag = (tag) => {
@@ -671,25 +826,75 @@ export default function AquaCRM() {
                 <table className="sales-table">
                   <thead>
                     <tr>
-                      <th>Product</th>
+                      <th>Product / Desc</th>
                       <th>SKU</th>
                       <th>Category</th>
                       <th>Price</th>
                       <th>Cost</th>
                       <th>Stock</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {inventory.map(item => (
-                      <tr key={item.id}>
-                        <td style={{ color: "#e0f0ff", fontWeight: 500 }}>{item.name}</td>
-                        <td style={{ fontSize: 12, color: "#4a7fa5", fontFamily: "monospace" }}>{item.sku || "—"}</td>
-                        <td><span className="tag" style={{ background: `${TAG_COLORS[item.category] || "#4a7fa5"}22`, color: TAG_COLORS[item.category] || "#4a7fa5" }}>{item.category}</span></td>
-                        <td className="amount-cell">${Number(item.price).toFixed(2)}</td>
-                        <td style={{ color: "#4a7fa5" }}>${Number(item.cost).toFixed(2)}</td>
-                        <td><span style={{ color: item.stock_qty > 5 ? "#06d6a0" : item.stock_qty > 0 ? "#ffd166" : "#ef476f", fontWeight: 600 }}>{item.stock_qty}</span></td>
-                      </tr>
-                    ))}
+                    {inventory.map(item => {
+                      const isEditingProd = editingProduct && editingProduct.id === item.id;
+                      return (
+                        <tr key={item.id} style={{ background: isEditingProd ? "#0a1e30" : "transparent" }}>
+                          {isEditingProd ? (
+                            <>
+                              <td style={{ minWidth: 200 }}>
+                                <input className="form-input" style={{ marginBottom: 4, width: "100%", padding: "4px 8px" }} value={editingProduct.name} onChange={e => setEditingProduct({...editingProduct, name: e.target.value})} placeholder="Product Name" />
+                                <input className="form-input" style={{ width: "100%", padding: "4px 8px", fontSize: 12 }} value={editingProduct.description || ""} onChange={e => setEditingProduct({...editingProduct, description: e.target.value})} placeholder="Description" />
+                              </td>
+                              <td style={{ fontSize: 12, color: "#4a7fa5", fontFamily: "monospace", verticalAlign: "top" }}>{item.sku || "—"}</td>
+                              <td style={{ verticalAlign: "top" }}>
+                                <select className="form-input" style={{ padding: "4px 8px" }} value={editingProduct.category} onChange={e => setEditingProduct({...editingProduct, category: e.target.value})}>
+                                  <option>SPS Coral</option>
+                                  <option>LPS Coral</option>
+                                  <option>Soft Coral</option>
+                                  <option>LED Lights</option>
+                                  <option>Equipment</option>
+                                  <option>Accessories</option>
+                                </select>
+                              </td>
+                              <td style={{ verticalAlign: "top", width: 90 }}>
+                                <input className="form-input" type="number" style={{ width: "100%", padding: "4px 8px" }} value={editingProduct.price} onChange={e => setEditingProduct({...editingProduct, price: e.target.value})} />
+                              </td>
+                              <td style={{ verticalAlign: "top", width: 90 }}>
+                                <input className="form-input" type="number" style={{ width: "100%", padding: "4px 8px" }} value={editingProduct.cost} onChange={e => setEditingProduct({...editingProduct, cost: e.target.value})} />
+                              </td>
+                              <td style={{ verticalAlign: "top", width: 90 }}>
+                                <input className="form-input" type="number" style={{ width: "100%", padding: "4px 8px" }} value={editingProduct.stock_qty} onChange={e => setEditingProduct({...editingProduct, stock_qty: e.target.value})} />
+                              </td>
+                              <td style={{ verticalAlign: "top" }}>
+                                <div style={{ display: "flex", gap: 6 }}>
+                                  <button className="btn btn-primary btn-sm" style={{ padding: "4px 8px", fontSize: 12 }} onClick={handleInventorySave}>Save</button>
+                                  <button className="btn btn-ghost btn-sm" style={{ padding: "4px 8px", fontSize: 12 }} onClick={() => setEditingProduct(null)}>Cancel</button>
+                                </div>
+                              </td>
+                            </>
+                          ) : (
+                            <>
+                              <td style={{ color: "#e0f0ff", fontWeight: 500 }}>
+                                <div>{item.name}</div>
+                                {item.description && <div style={{ fontSize: 11, color: "#4a7fa5", marginTop: 2 }}>{item.description}</div>}
+                              </td>
+                              <td style={{ fontSize: 12, color: "#4a7fa5", fontFamily: "monospace" }}>{item.sku || "—"}</td>
+                              <td><span className="tag" style={{ background: `${TAG_COLORS[item.category] || "#4a7fa5"}22`, color: TAG_COLORS[item.category] || "#4a7fa5" }}>{item.category}</span></td>
+                              <td className="amount-cell">${Number(item.price).toFixed(2)}</td>
+                              <td style={{ color: "#4a7fa5" }}>${Number(item.cost).toFixed(2)}</td>
+                              <td><span style={{ color: item.stock_qty > 5 ? "#06d6a0" : item.stock_qty > 0 ? "#ffd166" : "#ef476f", fontWeight: 600 }}>{item.stock_qty}</span></td>
+                              <td>
+                                <div style={{ display: "flex", gap: 6 }}>
+                                  <button className="btn btn-ghost btn-sm" style={{ padding: "4px 8px", fontSize: 12 }} onClick={() => setEditingProduct({ ...item })}>✏️</button>
+                                  <button className="btn btn-ghost btn-sm" style={{ padding: "4px 8px", fontSize: 12, color: "#ef476f" }} onClick={() => setDeleteProductId(item.id)}>🗑️</button>
+                                </div>
+                              </td>
+                            </>
+                          )}
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
                 {inventory.length === 0 && (
@@ -737,6 +942,22 @@ export default function AquaCRM() {
                   </div>
                   <button className="btn btn-primary" style={{ width: "100%", padding: "12px", marginTop: 8 }} onClick={handleAddProduct}>Add Product →</button>
                 </div>
+
+                {deleteProductId && (
+                  <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(5, 14, 26, 0.8)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000 }}>
+                    <div className="card" style={{ width: 400, maxWidth: "90%" }}>
+                      <div style={{ fontSize: 24, marginBottom: 16, textAlign: "center" }}>⚠️</div>
+                      <h3 style={{ margin: "0 0 12px 0", color: "#e0f0ff", textAlign: "center" }}>Delete Product?</h3>
+                      <p style={{ color: "#4a7fa5", textAlign: "center", marginBottom: 24, lineHeight: 1.5 }}>
+                        Are you sure you want to delete <strong>{inventory.find(i => i.id === deleteProductId)?.name}</strong>? This cannot be undone.
+                      </p>
+                      <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+                        <button className="btn btn-ghost" onClick={() => setDeleteProductId(null)}>Cancel</button>
+                        <button className="btn btn-primary" style={{ background: "#ef476f", borderColor: "#ef476f", color: "white" }} onClick={handleInventoryDelete}>Confirm Delete</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -756,21 +977,134 @@ export default function AquaCRM() {
                       <th>Channel</th>
                       <th>Amount</th>
                       <th>Date</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {sales.map(s => (
-                      <tr key={s.id}>
-                        <td style={{ color: "#e0f0ff", fontWeight: 500 }}>{s.customer}</td>
-                        <td>{s.product}</td>
-                        <td><span className="tag" style={{ background: "#0e2340", color: "#4a7fa5" }}>{s.category}</span></td>
-                        <td><span className="channel-badge" style={{ background: `${CHANNEL_COLORS[s.channel]}22`, color: CHANNEL_COLORS[s.channel] }}>{s.channel}</span></td>
-                        <td className="amount-cell">${s.amount}</td>
-                        <td style={{ color: "#2a5278" }}>{s.date}</td>
-                      </tr>
-                    ))}
+                    {sales.map(s => {
+                      const isEditingS = editingSale && editingSale.id === s.id;
+                      return (
+                        <tr key={s.id} style={{ background: isEditingS ? "#0a1e30" : "transparent" }}>
+                          {isEditingS ? (
+                            <>
+                              <td style={{ verticalAlign: "top" }}>
+                                <select className="form-input" style={{ width: "100%", padding: "4px 8px" }} value={editingSale.customer_id || ""} onChange={e => setEditingSale({...editingSale, customer_id: e.target.value})}>
+                                  <option value={s.customer_id}>{s.customer}</option>
+                                  {customers.filter(c => c.id !== s.customer_id).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                </select>
+                              </td>
+                              <td style={{ verticalAlign: "top" }}>
+                                <select className="form-input" style={{ width: "100%", padding: "4px 8px" }} value={editingSale.product_id || ""} onChange={e => {
+                                  const selProd = inventory.find(p => p.id.toString() === e.target.value.toString());
+                                  let newAmount = editingSale.amount;
+                                  if (selProd) newAmount = selProd.price;
+                                  setEditingSale({...editingSale, product_id: e.target.value, amount: newAmount});
+                                }}>
+                                  <option value={s.product_id}>{s.product}</option>
+                                  {inventory.filter(p => p.id !== s.product_id).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                </select>
+                              </td>
+                              <td style={{ verticalAlign: "top" }}>
+                                <span className="tag" style={{ background: "#0e2340", color: "#4a7fa5" }}>{inventory.find(p => p.id.toString() === editingSale.product_id?.toString())?.category || s.category}</span>
+                              </td>
+                              <td style={{ verticalAlign: "top" }}>
+                                <select className="form-input" style={{ padding: "4px 8px" }} value={editingSale.channel} onChange={e => setEditingSale({...editingSale, channel: e.target.value})}>
+                                  {channels.map(ch => <option key={ch} value={ch}>{ch}</option>)}
+                                </select>
+                              </td>
+                              <td style={{ verticalAlign: "top", width: 90 }}>
+                                <input className="form-input" type="number" style={{ width: "100%", padding: "4px 8px" }} value={editingSale.amount} onChange={e => setEditingSale({...editingSale, amount: e.target.value})} />
+                              </td>
+                              <td style={{ verticalAlign: "top", width: 130 }}>
+                                <input className="form-input" type="date" style={{ width: "100%", padding: "4px 8px" }} value={editingSale.date} onChange={e => setEditingSale({...editingSale, date: e.target.value})} />
+                              </td>
+                              <td style={{ verticalAlign: "top" }}>
+                                <div style={{ display: "flex", gap: 6 }}>
+                                  <button className="btn btn-primary btn-sm" style={{ padding: "4px 8px", fontSize: 12 }} onClick={handleSaleSave}>Save</button>
+                                  <button className="btn btn-ghost btn-sm" style={{ padding: "4px 8px", fontSize: 12 }} onClick={() => setEditingSale(null)}>Cancel</button>
+                                </div>
+                              </td>
+                            </>
+                          ) : (
+                            <>
+                              <td style={{ color: "#e0f0ff", fontWeight: 500 }}>{s.customer}</td>
+                              <td>{s.product}</td>
+                              <td><span className="tag" style={{ background: "#0e2340", color: "#4a7fa5" }}>{s.category}</span></td>
+                              <td><span className="channel-badge" style={{ background: `${CHANNEL_COLORS[s.channel]}22`, color: CHANNEL_COLORS[s.channel] }}>{s.channel}</span></td>
+                              <td className="amount-cell">${Number(s.amount).toFixed(2)}</td>
+                              <td style={{ color: "#2a5278" }}>{s.date}</td>
+                              <td>
+                                <div style={{ display: "flex", gap: 6 }}>
+                                  <button className="btn btn-ghost btn-sm" style={{ padding: "4px 8px", fontSize: 12 }} onClick={() => setEditingSale({ ...s, customer_id: s.customer_id || customers.find(c => c.name === s.customer)?.id, product_id: s.product_id || inventory.find(p => p.name === s.product)?.id })}>✏️</button>
+                                  <button className="btn btn-ghost btn-sm" style={{ padding: "4px 8px", fontSize: 12, color: "#ef476f" }} onClick={() => setDeleteSaleId(s.id)}>🗑️</button>
+                                </div>
+                              </td>
+                            </>
+                          )}
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
+                {sales.length === 0 && (
+                  <div className="empty"><div className="empty-icon">💸</div>No sales yet.</div>
+                )}
+
+                <div style={{ marginTop: 24, padding: 20, background: "#0a1628", borderRadius: 12, border: "1px solid #1a3a5c" }}>
+                  <div className="section-title">Log New Sale</div>
+                  <div className="form-grid">
+                    <div className="form-group">
+                      <label>Customer *</label>
+                      <select className="form-input" value={newSale.customer_id} onChange={e => setNewSale({ ...newSale, customer_id: e.target.value })}>
+                        <option value="" disabled>Select Customer...</option>
+                        {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Product *</label>
+                      <select className="form-input" value={newSale.product_id} onChange={e => {
+                        const selProd = inventory.find(p => p.id.toString() === e.target.value.toString());
+                        let newAmt = newSale.amount;
+                        if (selProd) newAmt = selProd.price;
+                        setNewSale({ ...newSale, product_id: e.target.value, amount: newAmt });
+                      }}>
+                        <option value="" disabled>Select Product...</option>
+                        {inventory.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Channel</label>
+                      <select className="form-input" value={newSale.channel} onChange={e => setNewSale({ ...newSale, channel: e.target.value })}>
+                        {channels.map(ch => <option key={ch} value={ch}>{ch}</option>)}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Amount ($) *</label>
+                      <input className="form-input" type="number" placeholder="0.00" value={newSale.amount} onChange={e => setNewSale({ ...newSale, amount: e.target.value })} />
+                    </div>
+                    <div className="form-group">
+                      <label>Date</label>
+                      <input className="form-input" type="date" value={newSale.date} onChange={e => setNewSale({ ...newSale, date: e.target.value })} />
+                    </div>
+                  </div>
+                  <button className="btn btn-primary" style={{ width: "100%", padding: "12px", marginTop: 8 }} onClick={handleAddSale}>Add Sale →</button>
+                </div>
+
+                {deleteSaleId && (
+                  <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(5, 14, 26, 0.8)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000 }}>
+                    <div className="card" style={{ width: 400, maxWidth: "90%" }}>
+                      <div style={{ fontSize: 24, marginBottom: 16, textAlign: "center" }}>⚠️</div>
+                      <h3 style={{ margin: "0 0 12px 0", color: "#e0f0ff", textAlign: "center" }}>Delete Sale?</h3>
+                      <p style={{ color: "#4a7fa5", textAlign: "center", marginBottom: 24, lineHeight: 1.5 }}>
+                        Are you sure you want to delete this sales record? This cannot be undone.
+                      </p>
+                      <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+                        <button className="btn btn-ghost" onClick={() => setDeleteSaleId(null)}>Cancel</button>
+                        <button className="btn btn-primary" style={{ background: "#ef476f", borderColor: "#ef476f", color: "white" }} onClick={handleSaleDelete}>Confirm Delete</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
