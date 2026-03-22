@@ -4,28 +4,6 @@ import { supabase } from "./supabaseClient";
 import { QRCodeCanvas } from "qrcode.react";
 const FONTS = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');`;
 
-const MOCK_CUSTOMERS = [
-  { id: 1, name: "Marcus Rivera", email: "marcus@email.com", phone: "555-0101", channel: "TikTok", joined: "2025-01-15", totalSpent: 847, orders: 4, tags: ["SPS Coral", "LED Lights"], tankSize: "120gal", notes: "Loves acropora frags, watches every TikTok live", lastContact: "2025-03-01", location: "Austin, TX" },
-  { id: 2, name: "Priya Nair", email: "priya@email.com", phone: "555-0202", channel: "Trade Show", joined: "2024-11-03", totalSpent: 1240, orders: 7, tags: ["LPS Coral", "Nano Tank"], tankSize: "30gal", notes: "Regular at Austin Reef Club shows. Interested in frag swaps.", lastContact: "2025-02-20", location: "Houston, TX" },
-  { id: 3, name: "Derek Hollis", email: "derek@email.com", phone: "555-0303", channel: "Shopify", joined: "2025-02-01", totalSpent: 390, orders: 2, tags: ["LED Lights", "New Customer"], tankSize: "75gal", notes: "First purchase was Kessil A360. Follow up on upgrade path.", lastContact: "2025-02-01", location: "Dallas, TX" },
-  { id: 4, name: "Yuki Tanaka", email: "yuki@email.com", phone: "555-0404", channel: "Instagram", joined: "2024-09-22", totalSpent: 2100, orders: 11, tags: ["SPS Coral", "High-End Lights", "VIP"], tankSize: "200gal", notes: "Top spender. Reef tank influencer with 12k followers. Send new arrivals first.", lastContact: "2025-03-05", location: "San Antonio, TX" },
-  { id: 5, name: "Carlos Mendez", email: "carlos@email.com", phone: "555-0505", channel: "Home Store", joined: "2025-01-28", totalSpent: 560, orders: 3, tags: ["Soft Coral", "Beginner"], tankSize: "55gal", notes: "Local pickup customer. New to reefing, very curious — loves in-person advice.", lastContact: "2025-01-30", location: "Local" },
-];
-
-const MOCK_SALES = [
-  { id: 1, customer: "Yuki Tanaka", product: "SPS Pack 1", amount: 1200, channel: "Shopify", date: "2025-03-05", category: "SPS Coral" },
-  { id: 2, customer: "Marcus Rivera", product: "WYSIWYG Acropora Colony", amount: 380, channel: "TikTok", date: "2025-03-01", category: "SPS Coral" },
-  { id: 3, customer: "Priya Nair", product: "SPS Pack 3", amount: 520, channel: "Trade Show", date: "2025-02-20", category: "SPS Coral" },
-  { id: 4, customer: "Derek Hollis", product: "ReefBreeders Photon V2+", amount: 399, channel: "Shopify", date: "2025-02-01", category: "LED Lights" },
-  { id: 5, customer: "Carlos Mendez", product: "Collector Pack — Beginner", amount: 95, channel: "Home Store", date: "2025-01-30", category: "Soft Coral" },
-];
-
-const MOCK_CAMPAIGNS = [
-  { id: 1, name: "New WYSIWYG Drop", status: "Active", segment: "SPS Coral buyers", sent: 48, opened: 31, clicked: 14, date: "2025-03-01" },
-  { id: 2, name: "TikTok Live — SPS Pack Flash Sale", status: "Draft", segment: "TikTok customers", sent: 0, opened: 0, clicked: 0, date: "2025-03-10" },
-  { id: 3, name: "ReefBreeders Meridian In Stock", status: "Sent", segment: "LED Light buyers", sent: 72, opened: 45, clicked: 22, date: "2025-02-15" },
-];
-
 const CHANNEL_COLORS = {
   "TikTok": "#ff4d6d",
   "Trade Show": "#f4a261",
@@ -243,22 +221,66 @@ export default function AquaCRM() {
   const [qrVisible, setQrVisible] = useState(false);
   const [qrUrl, setQrUrl] = useState("");
 
-  // Fetch all data from Supabase on mount
+  // Step 2 & 3: Fetch real customers and inventory from Supabase on mount
   useEffect(() => {
     const fetchData = async () => {
-      const [custRes, salesRes, campRes, promoRes, invRes] = await Promise.all([
+      const [custRes, invRes, salesRes, campRes, promoRes] = await Promise.all([
         supabase.from('customers').select('*').order('created_at', { ascending: false }),
+        supabase.from('inventory').select('*').order('created_at', { ascending: false }),
         supabase.from('sales').select('*').order('date', { ascending: false }),
         supabase.from('campaigns').select('*').order('created_at', { ascending: false }),
         supabase.from('promotions').select('*').order('created_at', { ascending: false }),
-        supabase.from('inventory').select('*').order('created_at', { ascending: false }),
       ]);
-      if (custRes.data) setCustomers(custRes.data.map(c => ({ ...c, totalSpent: Number(c.total_spent), tankSize: c.tank_size, lastContact: c.last_contact })));
-      if (salesRes.data) setSales(salesRes.data.map(s => ({ ...s, customer: s.customer_name, amount: Number(s.amount) })));
-      if (campRes.data) setCampaigns(campRes.data);
-      if (promoRes.data) setPromotions(promoRes.data.map(p => ({ ...p, desc: p.description, start: p.start_date, end: p.end_date })));
-      if (invRes.data) setInventory(invRes.data.map(i => ({ ...i, price: Number(i.price), cost: Number(i.cost) })));
+      
+      // Handle Customers
+      if (custRes.data) {
+        setCustomers(custRes.data.map(c => ({ 
+          ...c, 
+          totalSpent: Number(c.total_spent), 
+          tankSize: c.tank_size, 
+          lastContact: c.last_contact 
+        })));
+      }
+      if (custRes.error) console.error("Error fetching customers:", custRes.error);
+
+      // Handle Inventory
+      if (invRes.data) {
+        setInventory(invRes.data.map(i => ({ 
+          ...i, 
+          price: Number(i.price), 
+          cost: Number(i.cost) 
+        })));
+      }
+      if (invRes.error) console.error("Error fetching inventory:", invRes.error);
+
+      // Handle Sales
+      if (salesRes.data) {
+        setSales(salesRes.data.map(s => ({ 
+          ...s, 
+          customer: s.customer_name, 
+          amount: Number(s.amount) 
+        })));
+      }
+      if (salesRes.error) console.error("Error fetching sales:", salesRes.error);
+
+      // Handle Campaigns
+      if (campRes.data) {
+        setCampaigns(campRes.data);
+      }
+      if (campRes.error) console.error("Error fetching campaigns:", campRes.error);
+
+      // Handle Promotions
+      if (promoRes.data) {
+        setPromotions(promoRes.data.map(p => ({ 
+          ...p, 
+          desc: p.description, 
+          start: p.start_date, 
+          end: p.end_date 
+        })));
+      }
+      if (promoRes.error) console.error("Error fetching promotions:", promoRes.error);
     };
+    
     fetchData();
   }, []);
 
@@ -268,8 +290,11 @@ export default function AquaCRM() {
   };
 
   const filteredCustomers = customers.filter(c => {
-    const matchSearch = c.name.toLowerCase().includes(search.toLowerCase()) || c.email.toLowerCase().includes(search.toLowerCase());
-    const matchChannel = channelFilter === "All" || c.channel === channelFilter;
+    const name = c.name || "";
+    const email = c.email || "";
+    const channel = c.channel || "";
+    const matchSearch = name.toLowerCase().includes(search.toLowerCase()) || email.toLowerCase().includes(search.toLowerCase());
+    const matchChannel = channelFilter === "All" || channel === channelFilter;
     return matchSearch && matchChannel;
   });
 
@@ -544,7 +569,7 @@ export default function AquaCRM() {
                           <span className="channel-badge" style={{ background: `${CHANNEL_COLORS[c.channel]}22`, color: CHANNEL_COLORS[c.channel] }}>{c.channel}</span>
                         </td>
                         <td>
-                          {c.tags.slice(0, 2).map(t => (
+                          {(Array.isArray(c.tags) ? c.tags : []).slice(0, 2).map(t => (
                             <span key={t} className="tag" style={{ background: `${TAG_COLORS[t] || "#4a7fa5"}22`, color: TAG_COLORS[t] || "#4a7fa5" }}>{t}</span>
                           ))}
                         </td>
@@ -879,8 +904,8 @@ export default function AquaCRM() {
                     <h2>{selectedCustomer.name}</h2>
                     <div className="profile-meta">{selectedCustomer.email} · {selectedCustomer.phone} · {selectedCustomer.location}</div>
                     <div style={{ marginTop: 6 }}>
-                      <span className="channel-badge" style={{ background: `${CHANNEL_COLORS[selectedCustomer.channel]}22`, color: CHANNEL_COLORS[selectedCustomer.channel] }}>{selectedCustomer.channel}</span>
-                      {selectedCustomer.tags?.map(t => <span key={t} className="tag" style={{ background: `${TAG_COLORS[t] || "#4a7fa5"}22`, color: TAG_COLORS[t] || "#4a7fa5", marginLeft: 4 }}>{t}</span>)}
+                      <span className="channel-badge" style={{ background: `${CHANNEL_COLORS[selectedCustomer.channel] || "#4a7fa5"}22`, color: CHANNEL_COLORS[selectedCustomer.channel] || "#4a7fa5" }}>{selectedCustomer.channel || "Unknown"}</span>
+                      {(Array.isArray(selectedCustomer.tags) ? selectedCustomer.tags : []).map(t => <span key={t} className="tag" style={{ background: `${TAG_COLORS[t] || "#4a7fa5"}22`, color: TAG_COLORS[t] || "#4a7fa5", marginLeft: 4 }}>{t}</span>)}
                     </div>
                   </div>
                 </div>
