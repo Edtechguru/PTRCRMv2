@@ -229,6 +229,10 @@ export default function AquaCRM() {
   const [showCampaignModal, setShowCampaignModal] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState(null);
   const [campaignFormData, setCampaignFormData] = useState({ name: "", status: "Draft", segment: "", date: new Date().toISOString().split('T')[0] });
+  const [showPromoModal, setShowPromoModal] = useState(false);
+  const [editingPromo, setEditingPromo] = useState(null);
+  const [promoFormData, setPromoFormData] = useState({ title: "", description: "", code: "", channel: "Shopify", start_date: "Ongoing", end_date: "Ongoing" });
+  const [showPromoDeleteConfirm, setShowPromoDeleteConfirm] = useState(false);
   const [qrVisible, setQrVisible] = useState(false);
   const [qrUrl, setQrUrl] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -644,6 +648,113 @@ export default function AquaCRM() {
       });
     }
     setShowCampaignModal(true);
+  };
+
+  const handlePromoSave = async () => {
+    if (!promoFormData.title) {
+      showToast("Promotion Title is required");
+      return;
+    }
+
+    const payload = {
+      title: promoFormData.title,
+      description: promoFormData.description,
+      code: promoFormData.code,
+      channel: promoFormData.channel,
+      start_date: promoFormData.start_date,
+      end_date: promoFormData.end_date
+    };
+
+    if (editingPromo) {
+      // UPDATE
+      const { error } = await supabase
+        .from('promotions')
+        .update(payload)
+        .eq('id', editingPromo.id);
+
+      if (error) {
+        console.error("Update error:", error);
+        showToast("Save failed — please try again");
+        return;
+      }
+
+      setPromotions(promotions.map(p => p.id === editingPromo.id ? { 
+        ...p, 
+        ...payload,
+        desc: payload.description,
+        start: payload.start_date,
+        end: payload.end_date
+      } : p));
+      showToast("Promotion updated successfully!");
+    } else {
+      // INSERT
+      const { data, error } = await supabase
+        .from('promotions')
+        .insert([payload])
+        .select();
+
+      if (error) {
+        console.error("Insert error:", error);
+        showToast("Save failed — please try again");
+        return;
+      }
+
+      const inserted = {
+        ...data[0],
+        desc: data[0].description,
+        start: data[0].start_date,
+        end: data[0].end_date
+      };
+      setPromotions([inserted, ...promotions]);
+      showToast("Promotion created successfully!");
+    }
+
+    setShowPromoModal(false);
+    setEditingPromo(null);
+  };
+
+  const handlePromoDelete = async () => {
+    const { error } = await supabase
+      .from('promotions')
+      .delete()
+      .eq('id', editingPromo.id);
+
+    if (error) {
+      console.error("Delete error:", error);
+      showToast("Delete failed — please try again");
+      return;
+    }
+
+    setPromotions(promotions.filter(p => p.id !== editingPromo.id));
+    setShowPromoDeleteConfirm(false);
+    setShowPromoModal(false);
+    setEditingPromo(null);
+    showToast("Promotion deleted");
+  };
+
+  const openPromoModal = (promo = null) => {
+    if (promo) {
+      setEditingPromo(promo);
+      setPromoFormData({
+        title: promo.title,
+        description: promo.desc || promo.description,
+        code: promo.code,
+        channel: promo.channel,
+        start_date: promo.start || promo.start_date,
+        end_date: promo.end || promo.end_date
+      });
+    } else {
+      setEditingPromo(null);
+      setPromoFormData({
+        title: "",
+        description: "",
+        code: "",
+        channel: "Shopify",
+        start_date: "Ongoing",
+        end_date: "Ongoing"
+      });
+    }
+    setShowPromoModal(true);
   };
 
   const toggleTag = (tag) => {
@@ -1238,24 +1349,30 @@ export default function AquaCRM() {
             {tab === "promotions" && (
               <>
                 <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
-                  <button className="btn btn-primary" onClick={() => showToast("Promo builder coming soon!")}>+ New Promotion</button>
+                  <button className="btn btn-primary" onClick={() => openPromoModal()}>+ New Promotion</button>
                 </div>
-                {promotions.map((promo, i) => (
-                  <div key={promo.id || i} className="promo-card">
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                      <div>
-                        <div className="promo-title">{promo.title}</div>
-                        <div className="promo-desc">{promo.desc || promo.description}</div>
-                        <div className="promo-meta">
-                          <span>📅 <strong>{promo.start || promo.start_date}</strong> → {promo.end || promo.end_date}</span>
-                          <span>🔖 Code: <strong>{promo.code}</strong></span>
-                          <span>📣 <strong>{promo.channel}</strong></span>
+                {promotions.map((promo, i) => {
+                  const isExpired = promo.end !== "Ongoing" && promo.end_date !== "Ongoing" && new Date(promo.end || promo.end_date) < new Date();
+                  return (
+                    <div key={promo.id || i} className="promo-card">
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                        <div>
+                          <div className="promo-title">
+                            {promo.title}
+                            {isExpired && <span style={{ marginLeft: 12, background: "#1a3a5c", color: "#4a7fa5", padding: "2px 8px", borderRadius: 4, fontSize: 10, textTransform: "uppercase" }}>Expired</span>}
+                          </div>
+                          <div className="promo-desc">{promo.desc || promo.description}</div>
+                          <div className="promo-meta">
+                            <span>📅 <strong>{promo.start || promo.start_date}</strong> → {promo.end || promo.end_date}</span>
+                            <span>🔖 Code: <strong>{promo.code}</strong></span>
+                            <span>📣 <strong>{promo.channel}</strong></span>
+                          </div>
                         </div>
+                        <button className="btn btn-ghost btn-sm" onClick={() => openPromoModal(promo)}>Edit</button>
                       </div>
-                      <button className="btn btn-ghost btn-sm">Edit</button>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </>
             )}
 
@@ -1555,6 +1672,124 @@ export default function AquaCRM() {
                 <button className="btn btn-ghost" style={{ padding: '0 24px' }} onClick={() => setShowCampaignModal(false)}>
                   Cancel
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Promotion Builder Modal */}
+        {showPromoModal && (
+          <div className="modal-overlay">
+            <div className="modal">
+              <div className="modal-header">
+                <div>
+                  <h2 style={{ fontFamily: 'Syne', color: '#e0f0ff', fontSize: 24, margin: 0 }}>
+                    {editingPromo ? "Edit Promotion" : "Create New Promotion"}
+                  </h2>
+                  <p style={{ color: '#4a7fa5', fontSize: 13, marginTop: 4 }}>
+                    {editingPromo ? `Updating details for ${editingPromo.title}` : "Set up a new offer or discount"}
+                  </p>
+                </div>
+                <button className="modal-close" onClick={() => setShowPromoModal(false)}>×</button>
+              </div>
+
+              <div className="form-grid">
+                <div className="form-group full">
+                  <label>Promo Title *</label>
+                  <input 
+                    className="form-input" 
+                    placeholder="e.g. 10% Off TikTok Live" 
+                    value={promoFormData.title} 
+                    onChange={e => setPromoFormData({...promoFormData, title: e.target.value})}
+                  />
+                </div>
+                
+                <div className="form-group full">
+                  <label>Description</label>
+                  <textarea 
+                    className="form-input" 
+                    rows={3}
+                    placeholder="Describe the offer details..." 
+                    value={promoFormData.description} 
+                    onChange={e => setPromoFormData({...promoFormData, description: e.target.value})}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Promo Code</label>
+                  <input 
+                    className="form-input" 
+                    placeholder="e.g. LIVE10" 
+                    value={promoFormData.code} 
+                    onChange={e => setPromoFormData({...promoFormData, code: e.target.value})}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Channel</label>
+                  <select 
+                    className="form-input" 
+                    value={promoFormData.channel} 
+                    onChange={e => setPromoFormData({...promoFormData, channel: e.target.value})}
+                  >
+                    <option>Shopify</option>
+                    <option>TikTok</option>
+                    <option>Email List</option>
+                    <option>Trade Show</option>
+                    <option>All Channels</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Start Date</label>
+                  <input 
+                    className="form-input" 
+                    placeholder="e.g. Ongoing or 2024-03-01" 
+                    value={promoFormData.start_date} 
+                    onChange={e => setPromoFormData({...promoFormData, start_date: e.target.value})}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>End Date</label>
+                  <input 
+                    className="form-input" 
+                    placeholder="e.g. Ongoing or 2024-03-31" 
+                    value={promoFormData.end_date} 
+                    onChange={e => setPromoFormData({...promoFormData, end_date: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              <div style={{ marginTop: 32, display: "flex", gap: 12 }}>
+                <button className="btn btn-primary" style={{ flex: 1, padding: '14px' }} onClick={handlePromoSave}>
+                  {editingPromo ? "Save Changes" : "Create Promotion →"}
+                </button>
+                {editingPromo && (
+                  <button className="btn btn-ghost" style={{ padding: '0 24px', color: '#ef476f' }} onClick={() => setShowPromoDeleteConfirm(true)}>
+                    Delete
+                  </button>
+                )}
+                <button className="btn btn-ghost" style={{ padding: '0 24px' }} onClick={() => setShowPromoModal(false)}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Promo Delete Confirmation */}
+        {showPromoDeleteConfirm && (
+          <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(5, 14, 26, 0.8)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1100 }}>
+            <div className="card" style={{ width: 400, maxWidth: "90%" }}>
+              <div style={{ fontSize: 24, marginBottom: 16, textAlign: "center" }}>⚠️</div>
+              <h3 style={{ margin: "0 0 12px 0", color: "#e0f0ff", textAlign: "center" }}>Delete Promotion?</h3>
+              <p style={{ color: "#4a7fa5", textAlign: "center", marginBottom: 24, lineHeight: 1.5 }}>
+                Are you sure you want to delete <strong>{editingPromo?.title}</strong>? This cannot be undone.
+              </p>
+              <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+                <button className="btn btn-ghost" onClick={() => setShowPromoDeleteConfirm(false)}>Cancel</button>
+                <button className="btn btn-primary" style={{ background: "#ef476f", borderColor: "#ef476f", color: "white" }} onClick={handlePromoDelete}>Confirm Delete</button>
               </div>
             </div>
           </div>
