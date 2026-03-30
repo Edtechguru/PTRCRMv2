@@ -10,6 +10,7 @@ const CHANNEL_COLORS = {
   "Shopify": "#52b788",
   "Instagram": "#c77dff",
   "Home Store": "#4cc9f0",
+  "Discord": "#5865F2",
 };
 
 const TAG_COLORS = {
@@ -378,7 +379,7 @@ export default function AquaCRM() {
   });
 
   const totalRevenue = sales.reduce((a, b) => a + b.amount, 0);
-  const channels = ["TikTok", "Trade Show", "Shopify", "Instagram", "Home Store"];
+  const channels = ["TikTok", "Trade Show", "Shopify", "Instagram", "Home Store", "Discord"];
   const channelCounts = channels.map(ch => ({ name: ch, count: customers.filter(c => c.channel === ch).length }));
   const maxCount = Math.max(...channelCounts.map(c => c.count));
 
@@ -942,8 +943,8 @@ export default function AquaCRM() {
                         <div className="channel-val">{ch.count}</div>
                       </div>
                     ))}
-                    <div style={{ marginTop: 16, padding: "12px", background: "#0a1628", borderRadius: 8, fontSize: 12, color: "#4a7fa5" }}>
-                      🔗 Connect pootangreefs.com Shopify & TikTok Shop to auto-sync customers
+                    <div style={{ marginTop: 16, padding: "12px", background: "#0a1628", borderRadius: 8, fontSize: 12, color: "#4a7fa5", border: "1px solid #1a3a5c" }}>
+                      🔗 <strong>Integrated:</strong> Discord Bot (Demo) | <strong>Pending:</strong> Shopify & TikTok Sync
                     </div>
                   </div>
                 </div>
