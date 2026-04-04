@@ -32,6 +32,7 @@ CREATE TABLE inventory (
   stock_qty INTEGER DEFAULT 0,
   description TEXT,
   image_url TEXT,
+  shopify_url TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -87,15 +88,15 @@ INSERT INTO customers (name, email, phone, channel, joined, total_spent, orders,
   ('Carlos Mendez', 'carlos@email.com', '555-0505', 'Home Store', '2025-01-28', 560, 3, '["Soft Coral", "Beginner"]', '55gal', 'Local pickup customer. New to reefing, very curious — loves in-person advice.', '2025-01-30', 'Local');
 
 -- Seed inventory
-INSERT INTO inventory (name, sku, category, price, cost, stock_qty, description) VALUES
-  ('SPS Pack 1 — Beginner', 'SPS-PK-001', 'SPS Coral', 299, 120, 8, 'Starter SPS pack with 5 hardy acropora frags'),
-  ('SPS Pack 3 — Advanced', 'SPS-PK-003', 'SPS Coral', 520, 210, 4, 'Premium SPS pack with rare acropora colonies'),
-  ('WYSIWYG Acropora Colony', 'WYSIWYG-AC-001', 'SPS Coral', 380, 150, 2, 'What you see is what you get — hand-selected acropora colony'),
-  ('ReefBreeders Photon V2+', 'RB-PV2-001', 'LED Lights', 399, 280, 12, 'Full spectrum LED for reef tanks up to 48 inches'),
-  ('Collector Pack — Beginner', 'COL-BEG-001', 'Soft Coral', 95, 40, 15, 'Mixed soft coral pack perfect for beginners'),
-  ('Kessil A360X Tuna Blue', 'KES-A360-001', 'LED Lights', 449, 320, 6, 'Premium pendant LED with shimmer effect'),
-  ('Zoanthid Garden Pack', 'ZOA-GP-001', 'Soft Coral', 149, 60, 10, '10-piece zoanthid frag garden pack'),
-  ('ReefBreeders Meridian', 'RB-MER-001', 'LED Lights', 599, 420, 3, 'Top-tier full spectrum LED panel for SPS-dominant tanks');
+INSERT INTO inventory (name, sku, category, price, cost, stock_qty, description, image_url, shopify_url) VALUES
+  ('SPS Pack 1 — Beginner', 'SPS-PK-001', 'SPS Coral', 299, 120, 8, 'Starter SPS pack with 5 hardy acropora frags', 'https://images.unsplash.com/photo-1546059288-0f0cb021e8fd?auto=format&fit=crop&q=80&w=200', 'https://pootangreefs.com/products/sps-starter'),
+  ('SPS Pack 3 — Advanced', 'SPS-PK-003', 'SPS Coral', 520, 210, 4, 'Premium SPS pack with rare acropora colonies', 'https://images.unsplash.com/photo-1582967788606-a171c1080cb0?auto=format&fit=crop&q=80&w=200', 'https://pootangreefs.com/products/sps-advanced'),
+  ('WYSIWYG Acropora Colony', 'WYSIWYG-AC-001', 'SPS Coral', 380, 150, 2, 'What you see is what you get — hand-selected acropora colony', 'https://images.unsplash.com/photo-1518593448378-f7aa95c73db2?auto=format&fit=crop&q=80&w=200', 'https://pootangreefs.com/products/wysiwyg-acropora'),
+  ('ReefBreeders Photon V2+', 'RB-PV2-001', 'LED Lights', 399, 280, 12, 'Full spectrum LED for reef tanks up to 48 inches', 'https://images.unsplash.com/photo-1555580399-52d37905d6eb?auto=format&fit=crop&q=80&w=200', 'https://pootangreefs.com/products/photon-v2'),
+  ('Collector Pack — Beginner', 'COL-BEG-001', 'Soft Coral', 95, 40, 15, 'Mixed soft coral pack perfect for beginners', 'https://images.unsplash.com/photo-1533038590840-1cbea6e0ea79?auto=format&fit=crop&q=80&w=200', 'https://pootangreefs.com/products/collector-beginner'),
+  ('Kessil A360X Tuna Blue', 'KES-A360-001', 'LED Lights', 449, 320, 6, 'Premium pendant LED with shimmer effect', 'https://images.unsplash.com/photo-1553880400-36a5ea972e39?auto=format&fit=crop&q=80&w=200', 'https://pootangreefs.com/products/kessil-a360x'),
+  ('Zoanthid Garden Pack', 'ZOA-GP-001', 'Soft Coral', 149, 60, 10, '10-piece zoanthid frag garden pack', 'https://images.unsplash.com/photo-1616239169623-2895690b27b9?auto=format&fit=crop&q=80&w=200', 'https://pootangreefs.com/products/zoanthid-garden'),
+  ('ReefBreeders Meridian', 'RB-MER-001', 'LED Lights', 599, 420, 3, 'Top-tier full spectrum LED panel for SPS-dominant tanks', 'https://images.unsplash.com/photo-1583212292454-1fe6229603b7?auto=format&fit=crop&q=80&w=200', 'https://pootangreefs.com/products/meridian');
 
 -- Seed sales
 INSERT INTO sales (customer_name, product, amount, channel, date, category) VALUES

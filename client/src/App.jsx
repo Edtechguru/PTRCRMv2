@@ -221,7 +221,7 @@ export default function AquaCRM() {
   const [isEditing, setIsEditing] = useState(false);
   const [editFormData, setEditFormData] = useState({});
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [newProduct, setNewProduct] = useState({ name: "", sku: "", category: "SPS Coral", price: "", cost: "", stock_qty: "", description: "" });
+  const [newProduct, setNewProduct] = useState({ name: "", sku: "", category: "SPS Coral", price: "", cost: "", stock_qty: "", description: "", image_url: "", shopify_url: "" });
   const [editingProduct, setEditingProduct] = useState(null);
   const [deleteProductId, setDeleteProductId] = useState(null);
   const [newSale, setNewSale] = useState({ customer_id: "", product_id: "", channel: "Shopify", amount: "", date: new Date().toISOString().split('T')[0] });
@@ -424,10 +424,11 @@ export default function AquaCRM() {
       name: newProduct.name, sku: newProduct.sku || null, category: newProduct.category,
       price: Number(newProduct.price) || 0, cost: Number(newProduct.cost) || 0,
       stock_qty: Number(newProduct.stock_qty) || 0, description: newProduct.description,
+      image_url: newProduct.image_url
     }]).select();
     if (error) { showToast("✗ Error: " + error.message); return; }
-    if (data) setInventory([{ ...data[0], price: Number(data[0].price), cost: Number(data[0].cost) }, ...inventory]);
-    setNewProduct({ name: "", sku: "", category: "SPS Coral", price: "", cost: "", stock_qty: "", description: "" });
+    if (data) setInventory([{ ...data[0], price: Number(data[0].price), cost: Number(data[0].cost), shopify_url: newProduct.shopify_url }, ...inventory]);
+    setNewProduct({ name: "", sku: "", category: "SPS Coral", price: "", cost: "", stock_qty: "", description: "", image_url: "", shopify_url: "" });
     showToast("✓ Product added to inventory");
   };
 
@@ -441,6 +442,7 @@ export default function AquaCRM() {
         price: Number(editingProduct.price) || 0,
         cost: Number(editingProduct.cost) || 0,
         stock_qty: Number(editingProduct.stock_qty) || 0,
+        image_url: editingProduct.image_url
       })
       .eq('id', editingProduct.id);
 
@@ -1029,7 +1031,9 @@ export default function AquaCRM() {
                             <>
                               <td style={{ minWidth: 200 }}>
                                 <input className="form-input" style={{ marginBottom: 4, width: "100%", padding: "4px 8px" }} value={editingProduct.name} onChange={e => setEditingProduct({...editingProduct, name: e.target.value})} placeholder="Product Name" />
-                                <input className="form-input" style={{ width: "100%", padding: "4px 8px", fontSize: 12 }} value={editingProduct.description || ""} onChange={e => setEditingProduct({...editingProduct, description: e.target.value})} placeholder="Description" />
+                                <input className="form-input" style={{ marginBottom: 4, width: "100%", padding: "4px 8px", fontSize: 12 }} value={editingProduct.description || ""} onChange={e => setEditingProduct({...editingProduct, description: e.target.value})} placeholder="Description" />
+                                <input className="form-input" style={{ marginBottom: 4, width: "100%", padding: "4px 8px", fontSize: 12 }} value={editingProduct.image_url || ""} onChange={e => setEditingProduct({...editingProduct, image_url: e.target.value})} placeholder="Image URL (Thumbnail)" />
+                                <input className="form-input" style={{ width: "100%", padding: "4px 8px", fontSize: 12 }} value={editingProduct.shopify_url || ""} onChange={e => setEditingProduct({...editingProduct, shopify_url: e.target.value})} placeholder="Shopify Link URL" />
                               </td>
                               <td style={{ fontSize: 12, color: "#4a7fa5", fontFamily: "monospace", verticalAlign: "top" }}>{item.sku || "—"}</td>
                               <td style={{ verticalAlign: "top" }}>
@@ -1061,8 +1065,18 @@ export default function AquaCRM() {
                           ) : (
                             <>
                               <td style={{ color: "#e0f0ff", fontWeight: 500 }}>
-                                <div>{item.name}</div>
-                                {item.description && <div style={{ fontSize: 11, color: "#4a7fa5", marginTop: 2 }}>{item.description}</div>}
+                                <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+                                  {item.image_url ? (
+                                    <img src={item.image_url} alt={item.name} style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 4, background: "#0e2340", border: "1px solid #1a3a5c" }} />
+                                  ) : (
+                                    <div style={{ width: 40, height: 40, borderRadius: 4, background: "#0e2340", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, border: "1px solid #1a3a5c", flexShrink: 0 }}>📦</div>
+                                  )}
+                                  <div>
+                                    <div>{item.name}</div>
+                                    {item.description && <div style={{ fontSize: 11, color: "#4a7fa5", marginTop: 2 }}>{item.description}</div>}
+                                    {item.shopify_url && <a href={item.shopify_url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: "#4fc3f7", textDecoration: "none", marginTop: 2, display: "inline-block" }}>🔗 View on Shopify</a>}
+                                  </div>
+                                </div>
                               </td>
                               <td style={{ fontSize: 12, color: "#4a7fa5", fontFamily: "monospace" }}>{item.sku || "—"}</td>
                               <td><span className="tag" style={{ background: `${TAG_COLORS[item.category] || "#4a7fa5"}22`, color: TAG_COLORS[item.category] || "#4a7fa5" }}>{item.category}</span></td>
@@ -1123,6 +1137,14 @@ export default function AquaCRM() {
                     <div className="form-group full">
                       <label>Description</label>
                       <textarea className="form-input" rows={2} placeholder="Product description..." value={newProduct.description} onChange={e => setNewProduct({ ...newProduct, description: e.target.value })} />
+                    </div>
+                    <div className="form-group full">
+                      <label>Image URL</label>
+                      <input className="form-input" placeholder="https://.../image.png" value={newProduct.image_url} onChange={e => setNewProduct({ ...newProduct, image_url: e.target.value })} />
+                    </div>
+                    <div className="form-group full">
+                      <label>Shopify URL</label>
+                      <input className="form-input" placeholder="https://.../products/sku" value={newProduct.shopify_url} onChange={e => setNewProduct({ ...newProduct, shopify_url: e.target.value })} />
                     </div>
                   </div>
                   <button className="btn btn-primary" style={{ width: "100%", padding: "12px", marginTop: 8 }} onClick={handleAddProduct}>Add Product →</button>
